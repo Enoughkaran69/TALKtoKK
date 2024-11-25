@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat App</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <div id="name-input">
+            <input type="text" id="username" placeholder="Enter your name" />
+            <button id="submit-name">Submit</button>
+        </div>
+        <div id="chat-box" style="display: none;">
+            <div id="messages"></div>
+            <div id="typing-indicator" style="display: none;"></div> <!-- Typing indicator -->
+            <input type="text" id="message" placeholder="Type a message" />
+            <button id="send-message">Send</button>
+        </div>
+        
+    </div>
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
+        import { getDatabase, ref, push, onChildAdded, onValue, remove } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-database.js";
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+    apiKey: "AIzaSyBhT_v5ZXRNwosQu1h5O6iwN3M-N-JG190",
+    authDomain: "watchtogether-a8e28.firebaseapp.com",
+    databaseURL: "https://watchtogether-a8e28-default-rtdb.firebaseio.com/",
+    projectId: "watchtogether-a8e28",
+    storageBucket: "watchtogether-a8e28.firebasestorage.app",
+    messagingSenderId: "393892789141",
+    appId: "1:393892789141:web:b0877f280288d3277a149c"
+  };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        const submitNameButton = document.getElementById('submit-name');
+        const chatBox = document.getElementById('chat-box');
+        const messagesDiv = document.getElementById('messages');
+        const sendMessageButton = document.getElementById('send-message');
+        const usernameInput = document.getElementById('username');
+        const messageInput = document.getElementById('message');
+        const activeUsersDiv = document.getElementById('active-users'); // Div to show active users
+
+
+        let username;
+
+        // Check if a username is already saved in localStorage
+window.onload = () => {
+    const savedUsername = localStorage.getItem('username');
+    if (savedUsername) {
+        usernameInput.value = savedUsername; // Fill the input with the saved username
+        document.getElementById('name-input').style.display = 'none';
+        chatBox.style.display = 'block';
+        username = savedUsername; // Set the username variable
+        sendSystemMessage(`${username} has joined the chat.`); // Send joining message
+        loadMessages(); // Load previous messages
+    }
+};
+
+submitNameButton.addEventListener('click', () => {
+    username = usernameInput.value;
+    if (username) {
+        localStorage.setItem('username', username); // Save username to localStorage
+        document.getElementById('name-input').style.display = 'none';
+        chatBox.style.display = 'block';
+        
+        // Send joining message
+        sendSystemMessage(`${username} has joined the chat.`);
+        
+        loadMessages();
+    }
+});
+
+        sendMessageButton.addEventListener('click', () => {
+            sendMessage();
+        });
+
+        // Allow sending message with Enter key
+        messageInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        function sendMessage() {
+    const message = messageInput.value;
+    if (message) {
+        const messagesRef = ref(db, 'messages');
+        const timestamp = new Date(); // Get the current date and time
+        const day = timestamp.toLocaleDateString('en-US', { weekday: 'long' }); // Get the day of the week
+        const time = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); // Format time
+
+        push(messagesRef, {
+            name: username,
+            text: message,
+            day: day,
+            time: time
+        });
+        messageInput.value = '';
+    }
+}
+function loadMessages() {
+    const messagesRef = ref(db, 'messages');
+    onChildAdded(messagesRef, (data) => {
+        const message = data.val();
+        const messageElement = document.createElement('div');
+        messageElement.textContent = `${message.name} (${message.day}, ${message.time}): ${message.text}`;
+        messagesDiv.appendChild(messageElement);
+        
+        // Limit to the last 12 messages
+        const messages = messagesDiv.children;
+        if (messages.length > 12) {
+            messagesDiv.removeChild(messages[0]); // Remove the oldest message
+        }
+
+        messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the bottom of the chat box
+    });
+}
+function sendSystemMessage(text) {
+    const messagesRef = ref(db, 'messages');
+    const timestamp = new Date();
+    const day = timestamp.toLocaleDateString('en-US', { weekday: 'long' });
+    const time = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    push(messagesRef, {
+        name: 'System', // Indicate that this is a system message
+        text: text,
+        day: day,
+        time: time
+    });
+}
+
+// Add an event listener to handle when the user leaves the chat
+window.addEventListener('beforeunload', () => {
+    if (username) {
+        sendSystemMessage(`${username} has left the chat.`);
+    }
+});
+
+const typingRef = ref(db, 'typing'); // Reference to the typing status in the database
+let typingTimeout;
+
+// Function to indicate typing status
+function indicateTyping(isTyping) {
+    if (isTyping) {
+        push(typingRef, { user: username });
+    } else {
+        // Optionally, remove the typing status when not typing
+        // This part might require additional logic to identify the user who is typing
+    }
+}
+
+// Listen for keypress events to indicate typing
+messageInput.addEventListener('keypress', (event) => {
+    if (event.key === 'Enter') {
+        sendMessage();
+    } else {
+        indicateTyping(true);
+        
+        // Clear the previous timeout
+        clearTimeout(typingTimeout);
+        
+        // Set a timeout to indicate that the user has stopped typing
+        typingTimeout = setTimeout(() => {
+            indicateTyping(false);
+        }, 1000); // Adjust the timeout duration as needed
+    }
+});
+
+// Listen for changes in the typing status
+onValue(typingRef, (snapshot) => {
+    const typingUsers = snapshot.val();
+    const typingNames = [];
+    
+    for (const key in typingUsers) {
+        if (typingUsers[key].user !== username) { // Avoid showing own typing status
+            typingNames.push(typingUsers[key].user);
+        }
+    }
+    
+    if (typingNames.length > 0) {
+        typingIndicator.style.display = 'block';
+        typingIndicator.textContent = `${typingNames.join(', ')} is typing...`;
+    } else {
+        typingIndicator.style.display = 'none';
+    }
+});
+    </script>
+</body>
+</html>
