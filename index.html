@@ -53,13 +53,13 @@
       background-color: #0056b3;
     }
 
-    /* YouTube Player */
     #player {
-      width: 100%;
-      max-width: 640px;
-      height: 400px;
-      margin: 20px 0;
-    }
+  width: 100%;
+  max-width: 640px; /* You can also increase this if needed */
+  height: 600px; /* Increased height */
+  margin: 20px 0;
+}
+
 
     /* Floating Search Popup */
     #searchPopup {
@@ -110,9 +110,10 @@
 
     /* Media Queries */
     @media (max-width: 768px) {
-      #player {
-        height: 400px;
-      }
+        #player {
+    height: 500px; /* Adjusted height for tablets */
+  }
+}
 
       input[type="text"] {
         width: 90%;
@@ -122,8 +123,7 @@
         width: 100%;
         font-size: 14px;
       }
-    }
-
+    
     @media (max-width: 480px) {
       h1 {
         font-size: 20px;
@@ -141,7 +141,7 @@
       }
 
       #player {
-        height: 315px;
+        height: 400px;
       }
     }
 
@@ -184,7 +184,9 @@
   </style>
 </head>
 <body>
-  <h1>Watch Together</h1>
+    <h2 id="activeUsersCount">Active Users: 0</h2>
+
+  <h1>WATCH WITH KK</h1>
 
   <!-- Input Box for URL or Search Query -->
   <div class="flex-row">
@@ -236,6 +238,8 @@
     // YouTube Player setup
     let player;
     let roomId = "room123"; // Replace with dynamic room IDs in production
+    const userId = "user_" + Date.now(); // Use a unique user identifier
+trackUserActivity(userId);
 
     // Send Chat Message
     document.getElementById("send-chat-btn").addEventListener("click", () => {
@@ -491,6 +495,36 @@ function updatePlayerState(state) {
         alert("An error occurred while loading the video.");
       }
     }
+
+    // Initialize the user tracking when a user joins
+function trackUserActivity(userId) {
+  const userRef = db.ref(`rooms/${roomId}/activeUsers/${userId}`);
+  
+  // Set the user as online
+  userRef.set({
+    userId,
+    timestamp: Date.now()
+  });
+
+  // Update active users count
+  updateActiveUserCount();
+
+  // Clean up when the user leaves
+  window.addEventListener('beforeunload', () => {
+    userRef.remove();
+    updateActiveUserCount();
+  });
+}
+
+// Update the active user count
+function updateActiveUserCount() {
+  db.ref(`rooms/${roomId}/activeUsers`).once('value', snapshot => {
+    const activeUsers = snapshot.val() || {};
+    const activeUserCount = Object.keys(activeUsers).length;
+    document.getElementById('activeUsersCount').textContent = `Active Users: ${activeUserCount}`;
+  });
+}
+
   </script>
 </body>
 </html>
