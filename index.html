@@ -1,197 +1,293 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat App</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Synced YouTube Player</title>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <style>
+    /* Style for the Floating Popup */
+    #searchPopup {
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: white;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+      padding: 20px;
+      width: 80%;
+      max-width: 600px;
+      z-index: 1000;
+      display: none; /* Initially hidden */
+    }
+
+    .search-result {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .search-result img {
+      width: 60px;
+      height: 40px;
+      margin-right: 10px;
+    }
+
+    .search-result span {
+      flex-grow: 1;
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: bold;
+      color: red;
+    }
+  </style>
 </head>
 <body>
-    <div id="app">
-        <div id="name-input">
-            <input type="text" id="username" placeholder="Enter your name" />
-            <button id="submit-name">Submit</button>
-        </div>
-        <div id="chat-box" style="display: none;">
-            <div id="messages"></div>
-            <div id="typing-indicator" style="display: none;"></div> <!-- Typing indicator -->
-            <input type="text" id="message" placeholder="Type a message" />
-            <button id="send-message">Send</button>
-        </div>
+    <h1>Watch Together</h1>
+
+    <!-- Input Box for URL or Search Query -->
+    <input type="text" id="inputBox" placeholder="Paste YouTube URL or Search for a video">
+    <button id="loadBtn">Load Video</button>
+  
+     <!-- Floating Search Results Popup -->
+  <div id="searchPopup">
+    <div class="close-btn" onclick="closeSearchPopup()">×</div>
+    <div id="searchResults"></div>
+  </div>
+
+  
+    <!-- YouTube Player -->
+    <div id="player">
         
     </div>
-    <script type="module">
-        // Import the functions you need from the SDKs you need
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-app.js";
-        import { getDatabase, ref, push, onChildAdded, onValue, remove } from "https://www.gstatic.com/firebasejs/10.4.0/firebase-database.js";
-
-        // Your web app's Firebase configuration
-        const firebaseConfig = {
-    apiKey: "AIzaSyBhT_v5ZXRNwosQu1h5O6iwN3M-N-JG190",
-    authDomain: "watchtogether-a8e28.firebaseapp.com",
-    databaseURL: "https://watchtogether-a8e28-default-rtdb.firebaseio.com/",
-    projectId: "watchtogether-a8e28",
-    storageBucket: "watchtogether-a8e28.firebasestorage.app",
-    messagingSenderId: "393892789141",
-    appId: "1:393892789141:web:b0877f280288d3277a149c"
-  };
-
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
-
-        const submitNameButton = document.getElementById('submit-name');
-        const chatBox = document.getElementById('chat-box');
-        const messagesDiv = document.getElementById('messages');
-        const sendMessageButton = document.getElementById('send-message');
-        const usernameInput = document.getElementById('username');
-        const messageInput = document.getElementById('message');
-        const activeUsersDiv = document.getElementById('active-users'); // Div to show active users
-
-
-        let username;
-
-        // Check if a username is already saved in localStorage
-window.onload = () => {
-    const savedUsername = localStorage.getItem('username');
-    if (savedUsername) {
-        usernameInput.value = savedUsername; // Fill the input with the saved username
-        document.getElementById('name-input').style.display = 'none';
-        chatBox.style.display = 'block';
-        username = savedUsername; // Set the username variable
-        sendSystemMessage(`${username} has joined the chat.`); // Send joining message
-        loadMessages(); // Load previous messages
-    }
+    
+  
+    <button id="playPauseBtn">Play/Pause</button>
+    <button id="syncBtn">Sync</button>
+  <script>
+    // Configuration for Firebase
+    const firebaseConfig = {
+  apiKey: "AIzaSyBhT_v5ZXRNwosQu1h5O6iwN3M-N-JG190",
+  authDomain: "watchtogether-a8e28.firebaseapp.com",
+  databaseURL: "https://watchtogether-a8e28-default-rtdb.firebaseio.com",
+  projectId: "watchtogether-a8e28",
+  storageBucket: "watchtogether-a8e28.firebasestorage.app",
+  messagingSenderId: "393892789141",
+  appId: "1:393892789141:web:b0877f280288d3277a149c",
+  measurementId: "G-NJ389YLVJ8"
 };
 
-submitNameButton.addEventListener('click', () => {
-    username = usernameInput.value;
-    if (username) {
-        localStorage.setItem('username', username); // Save username to localStorage
-        document.getElementById('name-input').style.display = 'none';
-        chatBox.style.display = 'block';
-        
-        // Send joining message
-        sendSystemMessage(`${username} has joined the chat.`);
-        
-        loadMessages();
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // YouTube Player setup
+    let player;
+    let roomId = "room123"; // Replace with dynamic room IDs in production
+
+    // YouTube Data API Key
+    const youtubeApiKey = "AIzaSyA6UP-7PEXXrQaWf84WuG_RxHS5jBcQEqc";
+
+
+    function onYouTubeIframeAPIReady() {
+      player = new YT.Player('player', {
+        height: '360',
+        width: '640',
+        events: {
+          onStateChange: onPlayerStateChange,
+          onReady: onPlayerReady,
+        },
+      });
     }
+
+    function onPlayerReady() {
+      console.log("Player ready!");
+    }
+
+    let updateTimeout;
+
+    let lastSentState = null;
+let lastSentTime = null;
+
+function onPlayerStateChange(event) {
+  const state = event.data;
+  const currentTime = player.getCurrentTime();
+  const videoId = player.getVideoData().video_id;
+
+  // Update only on specific state changes
+  if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.PAUSED) {
+    if (lastSentState !== state || Math.abs(lastSentTime - currentTime) > 1) {
+      // Only update if there's a significant time change (>1 second) or state change
+      db.ref(`rooms/${roomId}`).set({
+        videoId,
+        state,
+        currentTime,
+      });
+
+      // Save the last sent values
+      lastSentState = state;
+      lastSentTime = currentTime;
+    }
+  }
+}
+
+
+    // Sync logic for updating other users
+db.ref(`rooms/${roomId}`).on("value", (snapshot) => {
+  const data = snapshot.val();
+  if (data) {
+    const { videoId, state, currentTime } = data;
+
+    // Load video if it's different
+    if (videoId && videoId !== player.getVideoData().video_id) {
+      player.loadVideoById(videoId, currentTime);
+      return;
+    }
+
+    const playerTime = player.getCurrentTime();
+    if (Math.abs(playerTime - currentTime) > 1) {
+      // Seek only if out of sync by more than 1 second
+      player.seekTo(currentTime, true);
+    }
+     // Sync play/pause state
+     if (state === YT.PlayerState.PLAYING && player.getPlayerState() !== YT.PlayerState.PLAYING) {
+      player.playVideo();
+    } else if (state === YT.PlayerState.PAUSED && player.getPlayerState() !== YT.PlayerState.PAUSED) {
+      player.pauseVideo();
+    }
+  }
 });
 
-        sendMessageButton.addEventListener('click', () => {
-            sendMessage();
+document.getElementById("loadBtn").addEventListener("click", () => {
+      const input = document.getElementById("inputBox").value;
+      const videoId = extractVideoId(input);
+
+      if (videoId) {
+        // It's a valid YouTube URL
+        db.ref(`rooms/${roomId}`).set({
+          videoId,
+          state: YT.PlayerState.PAUSED,
+          currentTime: 0,
         });
-
-        // Allow sending message with Enter key
-        messageInput.addEventListener('keypress', (event) => {
-            if (event.key === 'Enter') {
-                sendMessage();
-            }
-        });
-
-        function sendMessage() {
-    const message = messageInput.value;
-    if (message) {
-        const messagesRef = ref(db, 'messages');
-        const timestamp = new Date(); // Get the current date and time
-        const day = timestamp.toLocaleDateString('en-US', { weekday: 'long' }); // Get the day of the week
-        const time = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); // Format time
-
-        push(messagesRef, {
-            name: username,
-            text: message,
-            day: day,
-            time: time
-        });
-        messageInput.value = '';
-    }
-}
-function loadMessages() {
-    const messagesRef = ref(db, 'messages');
-    onChildAdded(messagesRef, (data) => {
-        const message = data.val();
-        const messageElement = document.createElement('div');
-        messageElement.textContent = `${message.name} (${message.day}, ${message.time}): ${message.text}`;
-        messagesDiv.appendChild(messageElement);
-        
-        // Limit to the last 12 messages
-        const messages = messagesDiv.children;
-        if (messages.length > 12) {
-            messagesDiv.removeChild(messages[0]); // Remove the oldest message
-        }
-
-        messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the bottom of the chat box
+        player.loadVideoById(videoId);
+      } else {
+        // Treat it as a search query
+        searchYouTubeVideos(input);
+      }
     });
-}
-function sendSystemMessage(text) {
-    const messagesRef = ref(db, 'messages');
-    const timestamp = new Date();
-    const day = timestamp.toLocaleDateString('en-US', { weekday: 'long' });
-    const time = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    push(messagesRef, {
-        name: 'System', // Indicate that this is a system message
-        text: text,
-        day: day,
-        time: time
+    // Play/Pause Button
+    document.getElementById("playPauseBtn").addEventListener("click", () => {
+      const playerState = player.getPlayerState();
+      if (playerState === YT.PlayerState.PLAYING) {
+        player.pauseVideo();
+      } else {
+        player.playVideo();
+      }
     });
+
+    // Sync Button (manual sync)
+    document.getElementById("syncBtn").addEventListener("click", () => {
+      const currentTime = player.getCurrentTime();
+      const state = player.getPlayerState();
+      const videoId = player.getVideoData().video_id;
+
+      db.ref(`rooms/${roomId}`).set({
+        videoId,
+        state,
+        currentTime,
+      });
+    });
+
+    function extractVideoId(url) {
+  // Check for regular YouTube URLs
+  const regexStandard = /(?:https?:\/\/)?(?:www\.)?youtube\.com\/(?:[^\/]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)([a-zA-Z0-9_-]{11})/;
+  
+  // Check for short YouTube URLs (youtu.be)
+  const regexShort = /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/;
+
+  let match = url.match(regexStandard);
+  if (!match) {
+    match = url.match(regexShort);
+  }
+
+  return match ? match[1] : null;
 }
-
-// Add an event listener to handle when the user leaves the chat
-window.addEventListener('beforeunload', () => {
-    if (username) {
-        sendSystemMessage(`${username} has left the chat.`);
+function searchYouTubeVideos(query) {
+      const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(query)}&key=${youtubeApiKey}`;
+      
+      fetch(searchUrl)
+        .then(response => response.json())
+        .then(data => {
+          displaySearchResults(data.items);
+        })
+        .catch(error => console.error("Error searching YouTube:", error));
     }
-});
 
-const typingRef = ref(db, 'typing'); // Reference to the typing status in the database
-let typingTimeout;
+    function displaySearchResults(videos) {
+      const resultsContainer = document.getElementById("searchResults");
+      resultsContainer.innerHTML = ""; // Clear previous results
 
-// Function to indicate typing status
-function indicateTyping(isTyping) {
-    if (isTyping) {
-        push(typingRef, { user: username });
-    } else {
-        // Optionally, remove the typing status when not typing
-        // This part might require additional logic to identify the user who is typing
-    }
-}
+      if (!Array.isArray(videos) || videos.length === 0) {
+        resultsContainer.innerHTML = "<p>No results found.</p>";
+        return;
+      }
 
-// Listen for keypress events to indicate typing
-messageInput.addEventListener('keypress', (event) => {
-    if (event.key === 'Enter') {
-        sendMessage();
-    } else {
-        indicateTyping(true);
+      videos.forEach(video => {
+        const videoId = video.id.videoId;
+        const videoTitle = video.snippet.title;
+        const videoThumbnail = video.snippet.thumbnails.default.url;
+
+        const resultItem = document.createElement("div");
+        resultItem.classList.add("search-result");
+
+        resultItem.innerHTML = `
+          <img src="${videoThumbnail}" alt="${videoTitle}" />
+          <span>${videoTitle}</span>
+          <button onclick="loadVideo('${videoId}')">Play</button>
+        `;
         
-        // Clear the previous timeout
-        clearTimeout(typingTimeout);
-        
-        // Set a timeout to indicate that the user has stopped typing
-        typingTimeout = setTimeout(() => {
-            indicateTyping(false);
-        }, 1000); // Adjust the timeout duration as needed
-    }
-});
+        resultsContainer.appendChild(resultItem);
+      });
 
-// Listen for changes in the typing status
-onValue(typingRef, (snapshot) => {
-    const typingUsers = snapshot.val();
-    const typingNames = [];
-    
-    for (const key in typingUsers) {
-        if (typingUsers[key].user !== username) { // Avoid showing own typing status
-            typingNames.push(typingUsers[key].user);
-        }
+    // Show the floating popup with search results
+    document.getElementById("searchPopup").style.display = "block";
     }
-    
-    if (typingNames.length > 0) {
-        typingIndicator.style.display = 'block';
-        typingIndicator.textContent = `${typingNames.join(', ')} is typing...`;
-    } else {
-        typingIndicator.style.display = 'none';
+
+    function loadVideo(videoId) {
+      db.ref(`rooms/${roomId}`).set({
+        videoId,
+        state: YT.PlayerState.PAUSED,
+        currentTime: 0,
+      });
+      player.loadVideoById(videoId);
+
+      // Hide the floating popup after selecting a video
+      closeSearchPopup();
     }
-});
-    </script>
+
+    function closeSearchPopup() {
+      document.getElementById("searchPopup").style.display = "none";
+    }
+ // Handle player errors (e.g., video unavailable)
+    function onPlayerError(event) {
+      const errorCode = event.data;
+      if (errorCode === 100) {
+        alert("This video is unavailable.");
+      } else if (errorCode === 101 || errorCode === 150) {
+        alert("This video cannot be embedded.");
+      } else {
+        alert("An error occurred while loading the video.");
+      }
+    }
+  </script>
 </body>
 </html>
