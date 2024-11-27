@@ -144,6 +144,31 @@
         height: 200px;
       }
     }
+    #chat-container {
+  margin-top: 20px;
+  width: 100%;
+  max-width: 600px;
+  margin: auto;
+}
+
+#chat-box {
+  height: 200px;
+  overflow-y: scroll;
+  border: 1px solid #ccc;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+#chat-input {
+  width: 80%;
+  padding: 10px;
+}
+
+#send-chat-btn {
+  width: 18%;
+  padding: 10px;
+}
+
   </style>
 </head>
 <body>
@@ -164,6 +189,13 @@
 
     <button id="playPauseBtn">Play/Pause</button>
     <button id="syncBtn">Sync</button>
+    <!-- Chat Section -->
+<div id="chat-container">
+    <div id="chat-box"></div> <!-- Chat messages will appear here -->
+    <input type="text" id="chat-input" placeholder="Type a message">
+    <button id="send-chat-btn">Send</button>
+  </div>
+  
 
   <script>
     // Configuration for Firebase
@@ -185,6 +217,44 @@
     // YouTube Player setup
     let player;
     let roomId = "room123"; // Replace with dynamic room IDs in production
+
+    // Send Chat Message
+document.getElementById("send-chat-btn").addEventListener("click", () => {
+  const messageInput = document.getElementById("chat-input");
+  const message = messageInput.value.trim();
+
+  if (message) {
+    const timestamp = Date.now();  // Use timestamp for sorting
+    db.ref(`rooms/${roomId}/messages`).push({
+      message,
+      timestamp,
+    }).then(() => {
+      messageInput.value = ''; // Clear the input field
+    });
+  }
+});
+// Listen for new messages
+db.ref(`rooms/${roomId}/messages`).orderByChild('timestamp').limitToLast(20).on("child_added", (snapshot) => {
+  const messageData = snapshot.val();
+  const messageElement = document.createElement("div");
+  messageElement.textContent = messageData.message;
+  document.getElementById("chat-box").appendChild(messageElement);
+
+  // Scroll to the bottom of the chat box
+  const chatBox = document.getElementById("chat-box");
+  chatBox.scrollTop = chatBox.scrollHeight;
+});
+
+// Delete messages if there are more than 20
+db.ref(`rooms/${roomId}/messages`).on("child_added", (snapshot) => {
+  const messageCount = snapshot.ref.parent.numChildren();
+  
+  if (messageCount > 20) {
+    // Delete the oldest message
+    const oldestMessageKey = snapshot.ref.parent.child(0).key;  // Get the first message key
+    db.ref(`rooms/${roomId}/messages/${oldestMessageKey}`).remove();
+  }
+});
 
     // YouTube Data API Key
     const youtubeApiKey = "AIzaSyA6UP-7PEXXrQaWf84WuG_RxHS5jBcQEqc";
@@ -233,31 +303,34 @@
     }
 
     // Sync logic for updating other users
-    db.ref(`rooms/${roomId}`).on("value", (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const { videoId, state, currentTime } = data;
+db.ref(`rooms/${roomId}`).on("value", (snapshot) => {
+  const data = snapshot.val();
+  if (data) {
+    const { videoId, state, currentTime } = data;
 
-        // Load video if it's different
-        if (videoId && videoId !== player.getVideoData().video_id) {
-          player.loadVideoById(videoId, currentTime);
-          return;
-        }
+    // Load video if it's different
+    if (videoId && videoId !== player.getVideoData().video_id) {
+      player.loadVideoById(videoId, currentTime);
+      return;
+    }
 
-        const playerTime = player.getCurrentTime();
-        if (Math.abs(playerTime - currentTime) > 1) {
-          // Seek only if out of sync by more than 1 second
-          player.seekTo(currentTime, true);
-        }
-        
-        // Sync play/pause state
-        if (state === YT.PlayerState.PLAYING && player.getPlayerState() !== YT.PlayerState.PLAYING) {
-          player.playVideo();
-        } else if (state === YT.PlayerState.PAUSED && player.getPlayerState() !== YT.PlayerState.PAUSED) {
-          player.pauseVideo();
-        }
-      }
-    });
+    const playerTime = player.getCurrentTime();
+    if (Math.abs(playerTime - currentTime) > 1) {
+      // Seek only if out of sync by more than 1 second
+      player.seekTo(currentTime, true);
+    }
+    
+    // Sync play/pause state
+    if (state === YT.PlayerState.PLAYING && player.getPlayerState() !== YT.PlayerState.PLAYING) {
+      player.playVideo();
+    } else if (state === YT.PlayerState.PAUSED && player.getPlayerState() !== YT.PlayerState.PAUSED) {
+      player.pauseVideo();
+    }
+  }
+});
+
+
+
 
     document.getElementById("loadBtn").addEventListener("click", () => {
       const input = document.getElementById("inputBox").value;
@@ -277,15 +350,30 @@
       }
     });
 
-    // Play/Pause Button
     document.getElementById("playPauseBtn").addEventListener("click", () => {
-      const playerState = player.getPlayerState();
-      if (playerState === YT.PlayerState.PLAYING) {
-        player.pauseVideo();
-      } else {
-        player.playVideo();
-      }
-    });
+  const playerState = player.getPlayerState();
+
+  if (playerState === YT.PlayerState.PLAYING) {
+    player.pauseVideo();
+    updatePlayerState(YT.PlayerState.PAUSED);
+  } else {
+    player.playVideo();
+    updatePlayerState(YT.PlayerState.PLAYING);
+  }
+});
+
+// Update Firebase with the current player state and time
+function updatePlayerState(state) {
+  const currentTime = player.getCurrentTime();
+  const videoId = player.getVideoData().video_id;
+
+  db.ref(`rooms/${roomId}`).set({
+    videoId,
+    state,
+    currentTime,
+  });
+}
+
 
     // Sync Button (manual sync)
     document.getElementById("syncBtn").addEventListener("click", () => {
