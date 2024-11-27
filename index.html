@@ -184,7 +184,7 @@
   </style>
 </head>
 <body>
-    <h2 id="activeUsersCount">Active Users: 0</h2>
+    <div id="activeUsersCount">Active Users: 0</div>
 
   <h1>WATCH WITH KK</h1>
 
@@ -505,17 +505,19 @@ function trackUserActivity(userId) {
     userId,
     timestamp: Date.now()
   });
-
+  userRef.onDisconnect().remove();
   // Update active users count
   updateActiveUserCount();
 
-  // Clean up when the user leaves
-  window.addEventListener('beforeunload', () => {
-    userRef.remove();
-    updateActiveUserCount();
+// Clean up when the user leaves
+window.addEventListener('beforeunload', () => {
+    userRef.remove()
+      .then(() => {
+        // Update active users count after removal
+        updateActiveUserCount();
+      });
   });
 }
-
 // Update the active user count
 function updateActiveUserCount() {
   db.ref(`rooms/${roomId}/activeUsers`).once('value', snapshot => {
@@ -524,7 +526,9 @@ function updateActiveUserCount() {
     document.getElementById('activeUsersCount').textContent = `Active Users: ${activeUserCount}`;
   });
 }
-
+setInterval(() => {
+  updateActiveUserCount(); // This will fetch the active user count and update the UI
+}, 30000);
   </script>
 </body>
 </html>
