@@ -8,34 +8,160 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
   <style>
+    /* Global Styles */
     body {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-      flex-direction: column;
       font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      box-sizing: border-box;
     }
 
     h1 {
-      margin-bottom: 20px;
+      font-size: 24px;
+      text-align: center;
+      margin: 20px;
     }
 
-    /* YouTube Player Container */
+    input[type="text"] {
+      padding: 10px;
+      width: 80%;
+      max-width: 500px;
+      margin-bottom: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      font-size: 16px;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 5px;
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    /* YouTube Player */
     #player {
-      width: 80%;
+      width: 100%;
       max-width: 640px;
-      margin-bottom: 20px;
+      height: 360px;
+      margin: 20px 0;
     }
 
-    /* Chat Container */
-    #chat-container {
+    /* Floating Search Popup */
+    #searchPopup {
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: white;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+      padding: 20px;
       width: 80%;
-      max-width: 640px;
+      max-width: 600px;
+      z-index: 1000;
+      display: none; /* Initially hidden */
+      max-height: 80%;
+      overflow-y: auto;
+    }
+
+    .search-result {
       display: flex;
-      flex-direction: column;
+      align-items: center;
+      margin-bottom: 10px;
+      cursor: pointer;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 10px;
+    }
+
+    .search-result img {
+      width: 60px;
+      height: 40px;
+      margin-right: 10px;
+    }
+
+    .search-result span {
+      flex-grow: 1;
+      font-size: 16px;
+    }
+
+    .close-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: bold;
+      color: red;
+    }
+
+    /* Media Queries */
+    @media (max-width: 768px) {
+      #player {
+        height: 250px;
+      }
+
+      input[type="text"] {
+        width: 90%;
+      }
+
+      button {
+        width: 100%;
+        font-size: 14px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      h1 {
+        font-size: 20px;
+      }
+
+      input[type="text"] {
+        width: 90%;
+        font-size: 14px;
+      }
+
+      button {
+        width: 100%;
+        font-size: 14px;
+        padding: 8px;
+      }
+
+      #player {
+        height: 200px;
+      }
+    }
+
+    /* Flexbox Layout for Rows */
+    .flex-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .flex-row > * {
+      margin: 5px;
+    }
+
+    #chat-container {
       margin-top: 20px;
+      width: 100%;
+      max-width: 600px;
+      margin: auto;
     }
 
     #chat-box {
@@ -44,58 +170,50 @@
       border: 1px solid #ccc;
       padding: 10px;
       margin-bottom: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .chat-message {
-      padding: 10px;
-      border-radius: 5px;
-      max-width: 70%;
-    }
-
-    .current-user {
-      background-color: #DCF8C6;
-      align-self: flex-end;
-    }
-
-    .other-user {
-      background-color: #EAEAEA;
-      align-self: flex-start;
     }
 
     #chat-input {
-      width: 100%;
+      width: 80%;
       padding: 10px;
     }
 
     #send-chat-btn {
+      width: 18%;
       padding: 10px;
-    }
-
-    /* Buttons */
-    #playPauseBtn, #syncBtn {
-      padding: 10px;
-      margin-top: 10px;
     }
   </style>
 </head>
 <body>
   <h1>Watch Together</h1>
 
+  <!-- Input Box for URL or Search Query -->
+  <div class="flex-row">
+    <input type="text" id="inputBox" placeholder="Paste YouTube URL or Search for a video">
+    <button id="loadBtn">Load Video</button>
+  </div>
+  
+  <!-- Floating Search Results Popup -->
+  <div id="searchPopup">
+    <div class="close-btn" onclick="closeSearchPopup()">×</div>
+    <div id="searchResults"></div>
+  </div>
+
   <!-- YouTube Player -->
   <div id="player"></div>
 
   <!-- Play/Pause and Sync Buttons -->
-  <button id="playPauseBtn">Play/Pause</button>
-  <button id="syncBtn">Sync</button>
+  <div class="flex-row">
+    <button id="playPauseBtn">Play/Pause</button>
+    <button id="syncBtn">Sync</button>
+  </div>
 
   <!-- Chat Section -->
   <div id="chat-container">
     <div id="chat-box"></div> <!-- Chat messages will appear here -->
-    <input type="text" id="chat-input" placeholder="Type a message">
-    <button id="send-chat-btn">Send</button>
+    <div class="flex-row">
+      <input type="text" id="chat-input" placeholder="Type a message">
+      <button id="send-chat-btn">Send</button>
+    </div>
   </div>
 
   <script>
@@ -115,26 +233,9 @@
     const app = firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    const roomId = "room123"; // Replace with dynamic room IDs in production
-    let player;
-
     // YouTube Player setup
-    function onYouTubeIframeAPIReady() {
-      player = new YT.Player('player', {
-        height: '360',
-        width: '640',
-        events: {
-          onStateChange: onPlayerStateChange,
-          onReady: onPlayerReady,
-        },
-      });
-    }
-
-    function onPlayerReady() {
-      console.log("Player ready!");
-    }
-
-    let currentUser = "user1"; // This should be dynamically set for each user
+    let player;
+    let roomId = "room123"; // Replace with dynamic room IDs in production
 
     // Send Chat Message
     document.getElementById("send-chat-btn").addEventListener("click", () => {
@@ -146,27 +247,17 @@
         db.ref(`rooms/${roomId}/messages`).push({
           message,
           timestamp,
-          user: currentUser,
         }).then(() => {
           messageInput.value = ''; // Clear the input field
         });
       }
     });
 
-    // Listen for new messages and display them
+    // Listen for new messages
     db.ref(`rooms/${roomId}/messages`).orderByChild('timestamp').limitToLast(20).on("child_added", (snapshot) => {
       const messageData = snapshot.val();
       const messageElement = document.createElement("div");
-      messageElement.classList.add("chat-message");
       messageElement.textContent = messageData.message;
-
-      // Check if the message is from the current user or another user
-      if (messageData.user === currentUser) {
-        messageElement.classList.add("current-user");
-      } else {
-        messageElement.classList.add("other-user");
-      }
-
       document.getElementById("chat-box").appendChild(messageElement);
 
       // Scroll to the bottom of the chat box
@@ -174,70 +265,61 @@
       chatBox.scrollTop = chatBox.scrollHeight;
     });
 
-    // Play/Pause Button
-    document.getElementById("playPauseBtn").addEventListener("click", () => {
-      const playerState = player.getPlayerState();
-
-      if (playerState === YT.PlayerState.PLAYING) {
-        player.pauseVideo();
-        updatePlayerState(YT.PlayerState.PAUSED);
-      } else {
-        player.playVideo();
-        updatePlayerState(YT.PlayerState.PLAYING);
+    // Delete messages if there are more than 20
+    db.ref(`rooms/${roomId}/messages`).on("child_added", (snapshot) => {
+      const messageCount = snapshot.ref.parent.numChildren();
+      
+      if (messageCount > 20) {
+        // Delete the oldest message
+        const oldestMessageKey = snapshot.ref.parent.child(0).key;  // Get the first message key
+        db.ref(`rooms/${roomId}/messages/${oldestMessageKey}`).remove();
       }
     });
 
-    // Sync Button (manual sync)
-    document.getElementById("syncBtn").addEventListener("click", () => {
-      const currentTime = player.getCurrentTime();
-      const state = player.getPlayerState();
-      const videoId = player.getVideoData().video_id;
+    // YouTube Data API Key
+    const youtubeApiKey = "AIzaSyA6UP-7PEXXrQaWf84WuG_RxHS5jBcQEqc";
 
-      db.ref(`rooms/${roomId}`).set({
-        videoId,
-        state,
-        currentTime,
-      });
-    });
-
-    // Update Firebase with the current player state and time
-    function updatePlayerState(state) {
-      const currentTime = player.getCurrentTime();
-      const videoId = player.getVideoData().video_id;
-
-      db.ref(`rooms/${roomId}`).set({
-        videoId,
-        state,
-        currentTime,
+    function onYouTubeIframeAPIReady() {
+      player = new YT.Player('player', {
+        height: '360',
+        width: '640',
+        events: {
+          onStateChange: onPlayerStateChange,
+          onReady: onPlayerReady,
+        },
       });
     }
 
-    // Sync logic for updating other users
-    db.ref(`rooms/${roomId}`).on("value", (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const { videoId, state, currentTime } = data;
+    function onPlayerReady(event) {
+      console.log("Player ready!");
+      player.playVideo(); // Play video automatically
+    }
 
-        // Load video if it's different
-        if (videoId && videoId !== player.getVideoData().video_id) {
-          player.loadVideoById(videoId, currentTime);
-          return;
-        }
+    function onPlayerStateChange(event) {
+      if (event.data === YT.PlayerState.PLAYING) {
+        console.log("Video is playing");
+      }
+    }
 
-        const playerTime = player.getCurrentTime();
-        if (Math.abs(playerTime - currentTime) > 1) {
-          // Seek only if out of sync by more than 1 second
-          player.seekTo(currentTime, true);
-        }
+    function loadVideo(videoId) {
+      player.loadVideoById(videoId);
+    }
 
-        // Sync play/pause state
-        if (state === YT.PlayerState.PLAYING && player.getPlayerState() !== YT.PlayerState.PLAYING) {
-          player.playVideo();
-        } else if (state === YT.PlayerState.PAUSED && player.getPlayerState() !== YT.PlayerState.PAUSED) {
-          player.pauseVideo();
-        }
+    document.getElementById("loadBtn").addEventListener("click", function() {
+      const videoUrl = document.getElementById("inputBox").value;
+      const videoId = extractVideoId(videoUrl);
+      if (videoId) {
+        loadVideo(videoId);
+      } else {
+        alert("Invalid YouTube URL.");
       }
     });
+
+    // Helper function to extract video ID from URL
+    function extractVideoId(url) {
+      const match = url.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/([A-Za-z0-9_-]{11})))|(?:youtu\.be\/([A-Za-z0-9_-]{11}))|(?:youtube\.com\/(?:v=|e(?:mbed)?\/|videoseries\?list=)([A-Za-z0-9_-]{11}))/);
+      return match ? match[1] || match[2] || match[3] : null;
+    }
   </script>
 </body>
 </html>
