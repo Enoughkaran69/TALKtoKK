@@ -8,7 +8,60 @@
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
   <style>
-    /* Style for the Floating Popup */
+    /* Global Styles */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      box-sizing: border-box;
+    }
+
+    h1 {
+      font-size: 24px;
+      text-align: center;
+      margin: 20px;
+    }
+
+    input[type="text"] {
+      padding: 10px;
+      width: 80%;
+      max-width: 500px;
+      margin-bottom: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      font-size: 16px;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 5px;
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    /* YouTube Player */
+    #player {
+      width: 100%;
+      max-width: 640px;
+      height: 360px;
+      margin: 20px 0;
+    }
+
+    /* Floating Search Popup */
     #searchPopup {
       position: fixed;
       top: 20%;
@@ -21,6 +74,8 @@
       max-width: 600px;
       z-index: 1000;
       display: none; /* Initially hidden */
+      max-height: 80%;
+      overflow-y: auto;
     }
 
     .search-result {
@@ -28,7 +83,10 @@
       align-items: center;
       margin-bottom: 10px;
       cursor: pointer;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 10px;
     }
+
     .search-result img {
       width: 60px;
       height: 40px;
@@ -37,6 +95,7 @@
 
     .search-result span {
       flex-grow: 1;
+      font-size: 16px;
     }
 
     .close-btn {
@@ -48,6 +107,43 @@
       font-weight: bold;
       color: red;
     }
+
+    /* Media Queries */
+    @media (max-width: 768px) {
+      #player {
+        height: 250px;
+      }
+
+      input[type="text"] {
+        width: 90%;
+      }
+
+      button {
+        width: 100%;
+        font-size: 14px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      h1 {
+        font-size: 20px;
+      }
+
+      input[type="text"] {
+        width: 90%;
+        font-size: 14px;
+      }
+
+      button {
+        width: 100%;
+        font-size: 14px;
+        padding: 8px;
+      }
+
+      #player {
+        height: 200px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -57,33 +153,30 @@
     <input type="text" id="inputBox" placeholder="Paste YouTube URL or Search for a video">
     <button id="loadBtn">Load Video</button>
   
-     <!-- Floating Search Results Popup -->
-  <div id="searchPopup">
-    <div class="close-btn" onclick="closeSearchPopup()">×</div>
-    <div id="searchResults"></div>
-  </div>
-
-  
-    <!-- YouTube Player -->
-    <div id="player">
-        
+    <!-- Floating Search Results Popup -->
+    <div id="searchPopup">
+      <div class="close-btn" onclick="closeSearchPopup()">×</div>
+      <div id="searchResults"></div>
     </div>
-    
-  
+
+    <!-- YouTube Player -->
+    <div id="player"></div>
+
     <button id="playPauseBtn">Play/Pause</button>
     <button id="syncBtn">Sync</button>
+
   <script>
     // Configuration for Firebase
     const firebaseConfig = {
-  apiKey: "AIzaSyBhT_v5ZXRNwosQu1h5O6iwN3M-N-JG190",
-  authDomain: "watchtogether-a8e28.firebaseapp.com",
-  databaseURL: "https://watchtogether-a8e28-default-rtdb.firebaseio.com",
-  projectId: "watchtogether-a8e28",
-  storageBucket: "watchtogether-a8e28.firebasestorage.app",
-  messagingSenderId: "393892789141",
-  appId: "1:393892789141:web:b0877f280288d3277a149c",
-  measurementId: "G-NJ389YLVJ8"
-};
+      apiKey: "AIzaSyBhT_v5ZXRNwosQu1h5O6iwN3M-N-JG190",
+      authDomain: "watchtogether-a8e28.firebaseapp.com",
+      databaseURL: "https://watchtogether-a8e28-default-rtdb.firebaseio.com",
+      projectId: "watchtogether-a8e28",
+      storageBucket: "watchtogether-a8e28.firebasestorage.app",
+      messagingSenderId: "393892789141",
+      appId: "1:393892789141:web:b0877f280288d3277a149c",
+      measurementId: "G-NJ389YLVJ8"
+    };
 
     // Initialize Firebase
     const app = firebase.initializeApp(firebaseConfig);
@@ -96,7 +189,6 @@
     // YouTube Data API Key
     const youtubeApiKey = "AIzaSyA6UP-7PEXXrQaWf84WuG_RxHS5jBcQEqc";
 
-
     function onYouTubeIframeAPIReady() {
       player = new YT.Player('player', {
         height: '360',
@@ -108,65 +200,66 @@
       });
     }
 
-    function onPlayerReady() {
-      console.log("Player ready!");
-    }
+    function onPlayerReady(event) {
+  console.log("Player ready!");
+  player.playVideo();  // Autoplay when player is ready
+}
 
     let updateTimeout;
 
     let lastSentState = null;
-let lastSentTime = null;
+    let lastSentTime = null;
 
-function onPlayerStateChange(event) {
-  const state = event.data;
-  const currentTime = player.getCurrentTime();
-  const videoId = player.getVideoData().video_id;
+    function onPlayerStateChange(event) {
+      const state = event.data;
+      const currentTime = player.getCurrentTime();
+      const videoId = player.getVideoData().video_id;
 
-  // Update only on specific state changes
-  if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.PAUSED) {
-    if (lastSentState !== state || Math.abs(lastSentTime - currentTime) > 1) {
-      // Only update if there's a significant time change (>1 second) or state change
-      db.ref(`rooms/${roomId}`).set({
-        videoId,
-        state,
-        currentTime,
-      });
+      // Update only on specific state changes
+      if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.PAUSED) {
+        if (lastSentState !== state || Math.abs(lastSentTime - currentTime) > 1) {
+          // Only update if there's a significant time change (>1 second) or state change
+          db.ref(`rooms/${roomId}`).set({
+            videoId,
+            state,
+            currentTime,
+          });
 
-      // Save the last sent values
-      lastSentState = state;
-      lastSentTime = currentTime;
+          // Save the last sent values
+          lastSentState = state;
+          lastSentTime = currentTime;
+        }
+      }
     }
-  }
-}
-
 
     // Sync logic for updating other users
-db.ref(`rooms/${roomId}`).on("value", (snapshot) => {
-  const data = snapshot.val();
-  if (data) {
-    const { videoId, state, currentTime } = data;
+    db.ref(`rooms/${roomId}`).on("value", (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const { videoId, state, currentTime } = data;
 
-    // Load video if it's different
-    if (videoId && videoId !== player.getVideoData().video_id) {
-      player.loadVideoById(videoId, currentTime);
-      return;
-    }
+        // Load video if it's different
+        if (videoId && videoId !== player.getVideoData().video_id) {
+          player.loadVideoById(videoId, currentTime);
+          return;
+        }
 
-    const playerTime = player.getCurrentTime();
-    if (Math.abs(playerTime - currentTime) > 1) {
-      // Seek only if out of sync by more than 1 second
-      player.seekTo(currentTime, true);
-    }
-     // Sync play/pause state
-     if (state === YT.PlayerState.PLAYING && player.getPlayerState() !== YT.PlayerState.PLAYING) {
-      player.playVideo();
-    } else if (state === YT.PlayerState.PAUSED && player.getPlayerState() !== YT.PlayerState.PAUSED) {
-      player.pauseVideo();
-    }
-  }
-});
+        const playerTime = player.getCurrentTime();
+        if (Math.abs(playerTime - currentTime) > 1) {
+          // Seek only if out of sync by more than 1 second
+          player.seekTo(currentTime, true);
+        }
+        
+        // Sync play/pause state
+        if (state === YT.PlayerState.PLAYING && player.getPlayerState() !== YT.PlayerState.PLAYING) {
+          player.playVideo();
+        } else if (state === YT.PlayerState.PAUSED && player.getPlayerState() !== YT.PlayerState.PAUSED) {
+          player.pauseVideo();
+        }
+      }
+    });
 
-document.getElementById("loadBtn").addEventListener("click", () => {
+    document.getElementById("loadBtn").addEventListener("click", () => {
       const input = document.getElementById("inputBox").value;
       const videoId = extractVideoId(input);
 
@@ -208,20 +301,21 @@ document.getElementById("loadBtn").addEventListener("click", () => {
     });
 
     function extractVideoId(url) {
-  // Check for regular YouTube URLs
-  const regexStandard = /(?:https?:\/\/)?(?:www\.)?youtube\.com\/(?:[^\/]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)([a-zA-Z0-9_-]{11})/;
-  
-  // Check for short YouTube URLs (youtu.be)
-  const regexShort = /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/;
+      // Check for regular YouTube URLs
+      const regexStandard = /(?:https?:\/\/)?(?:www\.)?youtube\.com\/(?:[^\/]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)([a-zA-Z0-9_-]{11})/;
+      
+      // Check for short YouTube URLs (youtu.be)
+      const regexShort = /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/;
 
-  let match = url.match(regexStandard);
-  if (!match) {
-    match = url.match(regexShort);
-  }
+      let match = url.match(regexStandard);
+      if (!match) {
+        match = url.match(regexShort);
+      }
 
-  return match ? match[1] : null;
-}
-function searchYouTubeVideos(query) {
+      return match ? match[1] : null;
+    }
+
+    function searchYouTubeVideos(query) {
       const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(query)}&key=${youtubeApiKey}`;
       
       fetch(searchUrl)
@@ -258,8 +352,8 @@ function searchYouTubeVideos(query) {
         resultsContainer.appendChild(resultItem);
       });
 
-    // Show the floating popup with search results
-    document.getElementById("searchPopup").style.display = "block";
+      // Show the floating popup with search results
+      document.getElementById("searchPopup").style.display = "block";
     }
 
     function loadVideo(videoId) {
@@ -277,7 +371,8 @@ function searchYouTubeVideos(query) {
     function closeSearchPopup() {
       document.getElementById("searchPopup").style.display = "none";
     }
- // Handle player errors (e.g., video unavailable)
+
+    // Handle player errors (e.g., video unavailable)
     function onPlayerError(event) {
       const errorCode = event.data;
       if (errorCode === 100) {
